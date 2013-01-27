@@ -88,7 +88,8 @@ function SaveKeys() {
   // CS255-todo: plaintext keys going to disk?
   var key_str = JSON.stringify(keys);
 
-  localStorage.setItem('facebook-keys-' + my_username, encodeURIComponent(key_str));
+  //localStorage.setItem('facebook-keys-' + my_username, encodeURIComponent(key_str));
+  localStorage.setItem('facebook-keys-' + my_username, key_str);
   localStorage.getItem('facebook-keys-' + my_username);
 }
 
@@ -97,8 +98,9 @@ function LoadKeys() {
   keys = {}; // Reset the keys.
   var saved = localStorage.getItem('facebook-keys-' + my_username);
   if (saved) {
-    var key_str = decodeURIComponent(saved);
+    //var key_str = decodeURIComponent(saved);
     // CS255-todo: plaintext keys were on disk?
+    var key_str = saved;
     keys = JSON.parse(key_str);
   }
 }
