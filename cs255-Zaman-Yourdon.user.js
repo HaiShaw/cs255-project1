@@ -75,7 +75,8 @@ function Decrypt(cipherText, group) {
 function GenerateKey(group) {
 
   // CS255-todo: Well this needs some work...
-  var key = 'CS255-todo';
+  // var key = 'CS255-todo';
+  var key = sjcl.codec.base64.fromBits(GetRandomValues(4));
 
   keys[group] = key;
   SaveKeys();
