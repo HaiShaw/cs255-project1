@@ -37,13 +37,14 @@ var keys = {}; // association map of keys: group -> key
 // @return {String} Encryption of the plaintext, encoded as a string.
 function Encrypt(plainText, group) {
   // CS255-todo: encrypt the plainText, using key for the group.
-  if ((plainText.indexOf('rot13:') == 0) || (plainText.length < 1)) {
+  if ((plainText.indexOf('aes128:') == 0) || (plainText.length < 1)) {
     // already done, or blank
     alert("Try entering a message (the button works only once)");
     return plainText;
   } else {
     // encrypt, add tag.
-    return 'rot13:' + rot13(plainText);
+    key = keys[group];
+    return 'aes128:' + aes128_enc(plainText, key);
   }
 
 }
@@ -58,16 +59,146 @@ function Decrypt(cipherText, group) {
 
   // CS255-todo: implement decryption on encrypted messages
 
-  if (cipherText.indexOf('rot13:') == 0) {
+  if (cipherText.indexOf('aes128:') == 0) {
 
     // decrypt, ignore the tag.
-    var decryptedMsg = rot13(cipherText.slice(6));
+    key = keys[group];
+    var decryptedMsg = aes128_dec(cipherText.slice(7), key);
     return decryptedMsg;
 
   } else {
     throw "not encrypted";
   }
 }
+
+
+//
+// AES
+// Encryption
+// Decryption
+// Implementation
+// @ Have NOT made counter 64 bits, for facebook messaging 32bit ctr seems enough
+// @ For every message change nonce!
+/*
+ * @param  {string} plainText  is utf8String codec
+ * @param  {string} keyString  is base64 codec
+ * @return {string} ciphertext is base64 codec
+ * nonce CTR block cipher mode AES128
+ */
+function aes128_enc(plainText, keyString) {
+    // CTR mode
+    var nonce = GetRandomValues(2);
+
+    // Int32 is important, as total should be kept as 128bits
+    var IV = new Int32Array(4);
+    IV[0] = nonce[0];
+    IV[1] = nonce[1];
+    IV[2] = 0;
+    IV[3] = 0;
+
+    // IV_In is used at last for bitArray concat, Int32Array NOT work!
+    var IV_In = new Array(4);
+    IV_In[0] = IV[0];
+    IV_In[1] = IV[1];
+    IV_In[2] = IV[2];
+    IV_In[3] = IV[3];
+
+    // each Int32 range from 0 => 2^32-1 (4294967295 == -1)
+    // so from signed values it goes from 0 => 2147483647, -2147483648, ... , -1
+    //
+    var key = sjcl.codec.base64.toBits(keyString);
+    var cipher = new sjcl.cipher.aes(key);
+
+    // the final cipherbits array
+    var cipherbt = []
+
+    var textbits = sjcl.codec.utf8String.toBits(plainText);
+    var textbitl = sjcl.bitArray.bitLength(textbits);
+
+    var numblock = (textbitl / 128) >> 0; // first even blocks
+
+    var texblock, padblock, cipherbk, cipherbt, lastblkl;
+
+    for (var i = 0; i < numblock; i++) {
+        texblock = sjcl.bitArray.bitSlice(textbits, i * 128, (i + 1) * 128);
+        IV[3] = i;
+        padblock = cipher.encrypt(IV);
+        cipherbk = sjcl.bitArray._xor4(texblock, padblock);
+        cipherbt = sjcl.bitArray.concat(cipherbt, cipherbk);
+    }
+    if ((textbitl / 128) > numblock) {
+        // if there is non-zero leftover bits in the last 128-bit block, use i
+        texblock = sjcl.bitArray.bitSlice(textbits, i * 128);
+        lastblkl = sjcl.bitArray.bitLength(texblock);
+        IV[3] = i;
+        padblock = cipher.encrypt(IV);
+        cipherbk = sjcl.bitArray._xor4(texblock, padblock);
+        cipherbk = sjcl.bitArray.bitSlice(cipherbk, 0, lastblkl);
+        //cipherbk = sjcl.bitArray.clamp(cipherbk, lastblkl);
+        cipherbt = sjcl.bitArray.concat(cipherbt, cipherbk);
+    }
+
+    return sjcl.codec.base64.fromBits(sjcl.bitArray.concat(IV_In, cipherbt));
+}
+
+
+/*
+ * @param  {string} cipherText is base64 codec
+ * @param  {string} keyString  is base64 codec
+ * @return {string} plaintext  is utf8String codec
+ * nonce CTR block cipher mode AES128
+ */
+function aes128_dec(cipherText, keyString) {
+  // CTR mode
+    var raw_cipherBits = sjcl.codec.base64.toBits(cipherText);
+
+    var IV = new Int32Array(4);
+    IV = sjcl.bitArray.bitSlice(raw_cipherBits, 0, 128)
+
+    var cipherbits = sjcl.bitArray.bitSlice(raw_cipherBits, 128);
+    var cipherbitl = sjcl.bitArray.bitLength(cipherbits);
+
+
+    // each Int32 range from 0 => 2^32-1 (4294967295 == -1)
+    // so from signed values it goes from 0 => 2147483647, -2147483648, ... , -1
+    //
+    var key = sjcl.codec.base64.toBits(keyString);
+    var cipher = new sjcl.cipher.aes(key);
+
+    var plainbits = []
+
+    var numblock = (cipherbitl / 128) >> 0; // first even blocks
+
+    var cipblock, padblock, plainblk, lastblkl;
+
+    for (var i = 0; i < numblock; i++) {
+        cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128, (i + 1) * 128);
+        IV[3] = i;
+        padblock  = cipher.encrypt(IV);
+        plainblk  = sjcl.bitArray._xor4(cipblock, padblock);
+        plainbits = sjcl.bitArray.concat(plainbits, plainblk);
+    }
+    if ((cipherbitl / 128) > numblock) {
+        // if there is non-zero leftover bits in the last 128-bit block, use i
+        cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128);
+        lastblkl = sjcl.bitArray.bitLength(cipblock);
+        IV[3] = i;
+        padblock = cipher.encrypt(IV);
+        plainblk = sjcl.bitArray._xor4(cipblock, padblock);
+        plainblk = sjcl.bitArray.bitSlice(plainblk, 0, lastblkl);
+        //cipherbk = sjcl.bitArray.clamp(cipherbk, lastblkl);
+        plainbits = sjcl.bitArray.concat(plainbits, plainblk);
+    }
+
+    return sjcl.codec.utf8String.fromBits(plainbits);
+}
+//
+// Implementation
+// Decryption
+// Encryption
+// AES
+//
+
 
 // Generate a new key for the given group.
 //
