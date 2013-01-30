@@ -84,7 +84,13 @@ function Decrypt(cipherText, group) {
  * @param  {string} plainText  is utf8String codec
  * @param  {string} keyString  is base64 codec
  * @return {string} ciphertext is base64 codec
+ *
  * nonce CTR block cipher mode AES128
+ * Ideally we should choose deterministic vs. random nonce,
+ * but since its hard to track Msg Post ID/Number globally
+ * per user per group we chose a random nonce with smaller
+ * Sem Security Bound (2^32 Msgs, due to birthday paradox)
+ * For facebook message App this seems to be enough though.
  */
 function aes128_enc(plainText, keyString) {
     // CTR mode
@@ -147,7 +153,13 @@ function aes128_enc(plainText, keyString) {
  * @param  {string} cipherText is base64 codec
  * @param  {string} keyString  is base64 codec
  * @return {string} plaintext  is utf8String codec
+ *
  * nonce CTR block cipher mode AES128
+ * Ideally we should choose deterministic vs. random nonce,
+ * but since its hard to track Msg Post ID/Number globally
+ * per user per group we chose a random nonce with smaller
+ * Sem Security Bound (2^32 Msgs, due to birthday paradox)
+ * For facebook message App this seems to be enough though.
  */
 function aes128_dec(cipherText, keyString) {
   // CTR mode
