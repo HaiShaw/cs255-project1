@@ -202,9 +202,14 @@ function aes128_dec(cipherText, keyString) {
  * @           E.g. msgText could be (password || nonce)
  * @return {string} crypto hash digest (128bit) is base64 codec
  *
+ * @MD-compliant length padding scheme: 
+ *  make non-even orig last block padded with "10...0", then add 
+ *       length padding block "0...0||(64bit len)" as the final!
+ *  make even original last block paded with "1...0||(64bit len)"
+ *
  * h(H, m) = E(m, H) xor H ===> H_(i+1)
  *
- * Initialize variables H0 (taken from MD5):
+ * Initialize variables H0 (taken from MD5), as long as fixed value:
  * var int h0 := 0x67452301   //A
  * var int h1 := 0xefcdab89   //B
  * var int h2 := 0x98badcfe   //C
@@ -212,47 +217,44 @@ function aes128_dec(cipherText, keyString) {
  */
 function aes128_hash(msgText) {
   // CTR mode
-    var raw_cipherBits = sjcl.codec.base64.toBits(cipherText);
+    var msgBits = sjcl.codec.base64.toBits(msgText);
+    var msgBitl = sjcl.bitArray.bitLength(msgBits);
 
+    // Padding Template
+    var PT = new Int32Array(4);
+    PT = [0x80000000, 0x00000000, 0x00000000, 0x00000000];
+
+    var PB = new Int32Array(4);
+    var rm = msgBitl % 128;
+    if (rm == 0) {  //    bit shift is tricky (unsigned >>>32 doesn't change val)
+        PB = [0x80000000, 0x00000000, msgBitl >>> 31 >> 1, msgBitl & 0xffffffff];
+    } else {
+        PB = [0x00000000, 0x00000000, msgBitl >>> 31 >> 1, msgBitl & 0xffffffff];
+        subpad = sjcl.bitArray.bitSlice(PT, 0, 128 - rm);
+        msgBits = sjcl.bitArray.concat(msgBits, subpad);
+    }
+
+    var raw_msgBits = sjcl.bitArray.concat(msgBits, PB);
+    var raw_msgBitl = sjcl.bitArray.bitLength(raw_msgBits);
+
+    // Take any fixed IV as H0
     var IV = new Int32Array(4);
-    IV = sjcl.bitArray.bitSlice(raw_cipherBits, 0, 128)
-
-    var cipherbits = sjcl.bitArray.bitSlice(raw_cipherBits, 128);
-    var cipherbitl = sjcl.bitArray.bitLength(cipherbits);
-
+    IV = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
 
     // each Int32 range from 0 => 2^32-1 (4294967295 == -1)
     // so from signed values it goes from 0 => 2147483647, -2147483648, ... , -1
     //
-    var key = sjcl.codec.base64.toBits(keyString);
-    var cipher = new sjcl.cipher.aes(key);
 
-    var plainbits = []
-
-    var numblock = (cipherbitl / 128) >> 0; // first even blocks
-
-    var cipblock, padblock, plainblk, lastblkl;
+    var numblock = (raw_msgBitl / 128) >> 0; // Even blocks aft len strength pad
+    var keyblock;
+    var H0 = IV;
 
     for (var i = 0; i < numblock; i++) {
-        cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128, (i + 1) * 128);
-        IV[3] = i;
-        padblock  = cipher.encrypt(IV);
-        plainblk  = sjcl.bitArray._xor4(cipblock, padblock);
-        plainbits = sjcl.bitArray.concat(plainbits, plainblk);
+        keyblock = sjcl.bitArray.bitSlice(raw_msgBits, i * 128, (i + 1) * 128);
+        var cipher = new sjcl.cipher.aes(keyblock);
+        H0 = cipher.encrypt(H0);
     }
-    if ((cipherbitl / 128) > numblock) {
-        // if there is non-zero leftover bits in the last 128-bit block, use i
-        cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128);
-        lastblkl = sjcl.bitArray.bitLength(cipblock);
-        IV[3] = i;
-        padblock = cipher.encrypt(IV);
-        plainblk = sjcl.bitArray._xor4(cipblock, padblock);
-        plainblk = sjcl.bitArray.bitSlice(plainblk, 0, lastblkl);
-        //cipherbk = sjcl.bitArray.clamp(cipherbk, lastblkl);
-        plainbits = sjcl.bitArray.concat(plainbits, plainblk);
-    }
-
-    return sjcl.codec.utf8String.fromBits(plainbits);
+    return sjcl.codec.base64.fromBits(H0);
 }
 
 
