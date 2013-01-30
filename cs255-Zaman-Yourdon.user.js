@@ -76,6 +76,7 @@ function Decrypt(cipherText, group) {
 // AES
 // Encryption
 // Decryption
+// crytographic hash
 // Implementation
 // @ Have NOT made counter 64 bits, for facebook messaging 32bit ctr seems enough
 // @ For every message change nonce!
@@ -192,8 +193,72 @@ function aes128_dec(cipherText, keyString) {
 
     return sjcl.codec.utf8String.fromBits(plainbits);
 }
+
+
+
+
+/*
+ * @param  {string} msgText is base64 codec
+ * @           E.g. msgText could be (password || nonce)
+ * @return {string} crypto hash digest (128bit) is base64 codec
+ *
+ * h(H, m) = E(m, H) xor H ===> H_(i+1)
+ *
+ * Initialize variables H0 (taken from MD5):
+ * var int h0 := 0x67452301   //A
+ * var int h1 := 0xefcdab89   //B
+ * var int h2 := 0x98badcfe   //C
+ * var int h3 := 0x10325476   //D
+ */
+function aes128_hash(msgText) {
+  // CTR mode
+    var raw_cipherBits = sjcl.codec.base64.toBits(cipherText);
+
+    var IV = new Int32Array(4);
+    IV = sjcl.bitArray.bitSlice(raw_cipherBits, 0, 128)
+
+    var cipherbits = sjcl.bitArray.bitSlice(raw_cipherBits, 128);
+    var cipherbitl = sjcl.bitArray.bitLength(cipherbits);
+
+
+    // each Int32 range from 0 => 2^32-1 (4294967295 == -1)
+    // so from signed values it goes from 0 => 2147483647, -2147483648, ... , -1
+    //
+    var key = sjcl.codec.base64.toBits(keyString);
+    var cipher = new sjcl.cipher.aes(key);
+
+    var plainbits = []
+
+    var numblock = (cipherbitl / 128) >> 0; // first even blocks
+
+    var cipblock, padblock, plainblk, lastblkl;
+
+    for (var i = 0; i < numblock; i++) {
+        cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128, (i + 1) * 128);
+        IV[3] = i;
+        padblock  = cipher.encrypt(IV);
+        plainblk  = sjcl.bitArray._xor4(cipblock, padblock);
+        plainbits = sjcl.bitArray.concat(plainbits, plainblk);
+    }
+    if ((cipherbitl / 128) > numblock) {
+        // if there is non-zero leftover bits in the last 128-bit block, use i
+        cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128);
+        lastblkl = sjcl.bitArray.bitLength(cipblock);
+        IV[3] = i;
+        padblock = cipher.encrypt(IV);
+        plainblk = sjcl.bitArray._xor4(cipblock, padblock);
+        plainblk = sjcl.bitArray.bitSlice(plainblk, 0, lastblkl);
+        //cipherbk = sjcl.bitArray.clamp(cipherbk, lastblkl);
+        plainbits = sjcl.bitArray.concat(plainbits, plainblk);
+    }
+
+    return sjcl.codec.utf8String.fromBits(plainbits);
+}
+
+
 //
 // Implementation
+// cryptographic hash
 // Decryption
 // Encryption
 // AES
