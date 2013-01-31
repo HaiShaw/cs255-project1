@@ -242,7 +242,7 @@ function aes128_hash(msgText) {
         PB = [0x80000000, 0x00000000, msgBitl >>> 31 >> 1, msgBitl & 0xffffffff];
     } else {
         PB = [0x00000000, 0x00000000, msgBitl >>> 31 >> 1, msgBitl & 0xffffffff];
-        subpad = sjcl.bitArray.bitSlice(PT, 0, 128 - rm);
+        var subpad = sjcl.bitArray.bitSlice(PT, 0, 128 - rm);
         msgBits = sjcl.bitArray.concat(msgBits, subpad);
     }
 
@@ -294,23 +294,105 @@ function GenerateKey(group) {
 
 // Take the current group keys, and save them to disk.
 function SaveKeys() {
+
+  var DBkeyStr = sessionStorage.getItem('facebook-dbkey-' + my_username);
   
   // CS255-todo: plaintext keys going to disk?
-  var key_str = JSON.stringify(keys);
+  //var key_str = JSON.stringify(keys);
+  var key_str = aes128_enc(JSON.stringify(keys), DBkeyStr);
 
   //localStorage.setItem('facebook-keys-' + my_username, encodeURIComponent(key_str));
   cs255.localStorage.setItem('facebook-keys-' + my_username, key_str);
-  cs255.localStorage.getItem('facebook-keys-' + my_username);
+  //cs255.localStorage.getItem('facebook-keys-' + my_username);
 }
 
 // Load the group keys from disk.
 function LoadKeys() {
+  var pwdsalted = cs255.localStorage.getItem('facebook-pwdsalted-' + my_username);
+  if (!pwdsalted) {   // Need to prompt user for password (suppose to be first time)
+    var password = "";
+    while (password == "") { password = prompt("Please create your key database password:"); }
+    var salt = GetRandomValues(4);
+    var pwds = sjcl.codec.utf8String.toBits(password);
+    // concat with random salt then hash digest to avoid rainbow table attack!
+    var pwdsaltBits = sjcl.bitArray.concat(pwds, salt);
+    var pwdsaltDgst = aes128_hash(sjcl.codec.base64.fromBits(pwdsaltBits));
+    var salt_String = sjcl.codec.base64.fromBits(salt);
+    // '|' is not one of the base64 char, so use here.
+    var pwdSalt_str = pwdsaltDgst + '|' + salt_String;
+    // Save password salted hash string in persistent storage, for later password validation
+    cs255.localStorage.setItem('facebook-pwdsalted-' + my_username, pwdSalt_str);
+
+    // Now derive the key database E/D key from user password, then save it to sessionStorage
+    // Generate a new salt for DB key derivation! 
+    var keyDBsalt = GetRandomValues(4);
+    var keyDBsalt_str = sjcl.codec.base64.fromBits(keyDBsalt);
+    // Generate 128bit key for aes128 E/D implemented in this project w/ max. iteration count
+    var DBkeyBit = sjcl.misc.pbkdf2(password, keyDBsalt, null, 128, null);
+    var DBkeyStr = sjcl.codec.base64.fromBits(DBkeyBit);
+
+    // Now save DBkeyStr to sessionStorage, we can NOT save this to persistent storage for security!
+    sessionStorage.setItem('facebook-dbkey-' + my_username, DBkeyStr);
+
+    // Also save keyDBsalt_str in persistent storage for later password validation & dbkey recover!
+    cs255.localStorage.setItem('facebook-dbkey-salt-' + my_username, keyDBsalt_str);
+
+  } else {
+    // first check if key database E/D key exists in sessionStorage, 
+    // if it exists, then just use it as it is (so )
+    // if not then prompt user for password validation
+    var DBkeyStr = sessionStorage.getItem('facebook-dbkey-' + my_username);
+    if (!DBkeyStr) {
+      // Into fresh session but user already set up key database (maybe null) w/ password
+      // Now we need to validate the user with password
+      var password = "";
+      while (password == "") { password = prompt("Please confirm your key database password:"); }
+      var pwds = sjcl.codec.utf8String.toBits(password);
+      var pwdSalt_str = pwdsalted;
+      var pwdsaltDgst = pwdSalt_str.split('|')[0];
+      var salt_String = pwdSalt_str.split('|')[1];
+      var salt = sjcl.codec.base64.toBits(salt_String);
+      var pwdsaltBits = sjcl.bitArray.concat(pwds, salt);
+      var pwd_newDgst = aes128_hash(sjcl.codec.base64.fromBits(pwdsaltBits));
+
+      while (pwdsaltDgst != pwd_newDgst) {
+        // If password-salt hash digest does NOT match, keep asking for
+	// a valiad password for user validation. For security this should
+	// be limited to only a few number of times (e.g. 10), if still
+	// fail we can choose to erase all persistent data & let user to
+	// roll in again starting fresh new from create key DB password.
+	// But in reality, we kept code simple here. It can be improved!
+
+        password = prompt("Wrong password! Please confirm your key database password again:");
+        pwds = sjcl.codec.utf8String.toBits(password);
+        pwdsaltBits = sjcl.bitArray.concat(pwds, salt);
+        pwd_newDgst = aes128_hash(sjcl.codec.base64.fromBits(pwdsaltBits));
+      }
+
+      // Now user's key database password confirmed, now go ahead recover its key database E/D key:
+      var keyDBsalt_str = cs255.localStorage.getItem('facebook-dbkey-salt-' + my_username);
+      var keyDBsalt = sjcl.codec.base64.toBits(keyDBsalt_str);
+      var DBkeyBit = sjcl.misc.pbkdf2(password, keyDBsalt, null, 128, null);
+      DBkeyStr = sjcl.codec.base64.fromBits(DBkeyBit);
+
+      // Now save DBkeyStr to sessionStorage, we can NOT save this to persistent storage for security!
+      sessionStorage.setItem('facebook-dbkey-' + my_username, DBkeyStr);
+    }
+  }
+
+  // DBkeyStr now contains the valid (user's) key database E/D key.
+  // Again it is never stored in persistent storage for DB security!
+
   keys = {}; // Reset the keys.
+
+  // saved will contain the encrypted cipherText of user's group-key database.
   var saved = cs255.localStorage.getItem('facebook-keys-' + my_username);
+
   if (saved) {
     //var key_str = decodeURIComponent(saved);
     // CS255-todo: plaintext keys were on disk?
-    var key_str = saved;
+    //var key_str = saved;
+    var key_str = aes128_dec(saved, DBkeyStr);
     keys = JSON.parse(key_str);
   }
 }

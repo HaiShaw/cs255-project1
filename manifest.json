@@ -2,7 +2,7 @@
   "content_scripts": [ {
     "exclude_globs": [  ],
     "include_globs": [ "http://www.facebook.com/*", "https://www.facebook.com/*" ],
-    "js": [ "cs255-facebook-encryption.user.js" ],
+    "js": [ "cs255-Zaman-Yourdon.user.js" ],
     "matches": [ "http://*/*", "https://*/*" ],
     "run_at": "document_idle"
   } ],
