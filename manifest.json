@@ -1,0 +1,16 @@
+{
+  "content_scripts": [ {
+    "exclude_globs": [  ],
+    "include_globs": [ "http://www.facebook.com/*", "https://www.facebook.com/*" ],
+    "js": [ "cs255-facebook-encryption.user.js" ],
+    "matches": [ "http://*/*", "https://*/*" ],
+    "run_at": "document_idle"
+  } ],
+  "permissions": ["storage"],
+  "converted_from_user_script": true,
+  "description": "CS255-Zaman-Yourdon - CS255 Assignment 1",
+  "key": "ad44N+Oz4atwVsSOFmiueoWpb/1JG9aQpjLf4eorMWU=",
+  "name": "CS255-Zaman-Yourdon",
+  "version": "1.5",
+  "manifest_version": 2
+}

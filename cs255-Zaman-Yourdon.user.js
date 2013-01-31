@@ -367,6 +367,36 @@ function LoadKeys() {
 /////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////
 
+var cs255 = {
+  localStorage: {
+    setItem: function(key, value) {
+      localStorage.setItem(key, value);
+      var newEntries = {};
+      newEntries[key] = value;
+      chrome.storage.local.set(newEntries);
+    },
+    getItem: function(key) {
+      return localStorage.getItem(key);
+    },
+    clear: function() {
+      chrome.storage.local.clear();
+    }
+  }
+}
+
+if (typeof chrome.storage === "undefined") {
+  var id = function() {};
+  chrome.storage = {local: {get: id, set: id}};
+}
+else {
+  // See if there are any values stored with the extension.
+  chrome.storage.local.get(null, function(onDisk) {
+    for (key in onDisk) {
+      localStorage.setItem(key, onDisk[key]);
+    }
+  });
+}
+
 // Get n 32-bit-integers entropy as an array. Defaults to 1 word
 function GetRandomValues(n) {
 
