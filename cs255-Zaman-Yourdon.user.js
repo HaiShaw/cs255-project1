@@ -299,14 +299,14 @@ function SaveKeys() {
   var key_str = JSON.stringify(keys);
 
   //localStorage.setItem('facebook-keys-' + my_username, encodeURIComponent(key_str));
-  localStorage.setItem('facebook-keys-' + my_username, key_str);
-  localStorage.getItem('facebook-keys-' + my_username);
+  cs255.localStorage.setItem('facebook-keys-' + my_username, key_str);
+  cs255.localStorage.getItem('facebook-keys-' + my_username);
 }
 
 // Load the group keys from disk.
 function LoadKeys() {
   keys = {}; // Reset the keys.
-  var saved = localStorage.getItem('facebook-keys-' + my_username);
+  var saved = cs255.localStorage.getItem('facebook-keys-' + my_username);
   if (saved) {
     //var key_str = decodeURIComponent(saved);
     // CS255-todo: plaintext keys were on disk?
