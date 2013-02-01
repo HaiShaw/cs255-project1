@@ -44,7 +44,12 @@ function Encrypt(plainText, group) {
   } else {
     // encrypt, add tag.
     key = keys[group];
-    return 'aes128:' + aes128_enc(plainText, key);
+    if (key) {
+      return 'aes128:' + aes128_enc(plainText, key);
+    } else {  // in case the group's key getting deleted. 
+      alert("Group key does NOT exist, no encryption done!");
+      return plainText;
+    }
   }
 
 }
@@ -63,8 +68,13 @@ function Decrypt(cipherText, group) {
 
     // decrypt, ignore the tag.
     key = keys[group];
-    var decryptedMsg = aes128_dec(cipherText.slice(7), key);
-    return decryptedMsg;
+    if (key) {
+      var decryptedMsg = aes128_dec(cipherText.slice(7), key);
+      return decryptedMsg;
+    } else {
+      // alert("Group key does NOT exist, no decryption done!");
+      return "[Group key does NOT exist, no decryption done!]\n" + cipherText;
+    }
 
   } else {
     throw "not encrypted";
@@ -376,6 +386,8 @@ function LoadKeys() {
       DBkeyStr = sjcl.codec.base64.fromBits(DBkeyBit);
 
       // Now save DBkeyStr to sessionStorage, we can NOT save this to persistent storage for security!
+      // But this DBkeyStr should be consistent across sessions, this is uniquely decided by
+      // user input password (not stored anywhere) and keyDBsalt, which is stored persistent
       sessionStorage.setItem('facebook-dbkey-' + my_username, DBkeyStr);
     }
   }
@@ -524,13 +536,15 @@ function rot13(text) {
 function SetupUsernames() {
   // get who you are logged in as
   var meta = document.getElementsByClassName('navItem tinyman')[0];
-  if (typeof meta !== "undefined") {
-    var usernameMatched = /www.facebook.com\/(.*?)ref=tn_tnmn/i.exec(meta.innerHTML);
-    usernameMatched = usernameMatched[1].replace(/&amp;/, '');
-    usernameMatched = usernameMatched.replace(/\?/, '');
-    usernameMatched = usernameMatched.replace(/profile\.phpid=/, '');
-    my_username = usernameMatched; // Update global.
-  }
+
+  // If we can't get a username, halt execution.
+  assert (typeof meta !== "undefined", "CS255 script failed. No username detected. (This is usually harmless.)");
+  
+  var usernameMatched = /www.facebook.com\/(.*?)ref=tn_tnmn/i.exec(meta.innerHTML);
+  usernameMatched = usernameMatched[1].replace(/&amp;/, '');
+  usernameMatched = usernameMatched.replace(/\?/, '');
+  usernameMatched = usernameMatched.replace(/profile\.phpid=/, '');
+  my_username = usernameMatched; // Update global.
 }
 
 function getClassName(obj) {
@@ -627,6 +641,27 @@ function AddEncryptionTab() {
       table.setAttribute('border', 1);
       table.setAttribute('width', "80%");
       div.appendChild(table);
+
+      var clearSessionStorage = document.createElement('button');
+      clearSessionStorage.innerHTML = "Clear sessionStorage";
+      clearSessionStorage.addEventListener("click", function() {
+        sessionStorage.clear();
+        console.log("Cleared sessionStorage.");
+      });
+
+      div.appendChild(document.createElement('br'));
+      div.appendChild(clearSessionStorage);
+      var clearLocalStorage = document.createElement('button');
+      clearLocalStorage.innerHTML = "Clear localStorage";
+      clearLocalStorage.addEventListener("click", function() {
+        localStorage.clear();
+        cs255.localStorage.clear();
+        console.log("Cleared localStorage, including the extension cache.");
+      });
+
+      div.appendChild(document.createElement('br'));
+      div.appendChild(clearLocalStorage);
+
     }
   }
 }
