@@ -139,6 +139,9 @@ function aes128_enc(plainText, keyString) {
     for (var i = 0; i < numblock; i++) {
         texblock = sjcl.bitArray.bitSlice(textbits, i * 128, (i + 1) * 128);
         IV[3] = i;
+        if (IV[3] == 0 && i != 0) {
+            IV[2]++;
+        }
         padblock = cipher.encrypt(IV);
         cipherbk = sjcl.bitArray._xor4(texblock, padblock);
         cipherbt = sjcl.bitArray.concat(cipherbt, cipherbk);
@@ -148,6 +151,9 @@ function aes128_enc(plainText, keyString) {
         texblock = sjcl.bitArray.bitSlice(textbits, i * 128);
         lastblkl = sjcl.bitArray.bitLength(texblock);
         IV[3] = i;
+        if (IV[3] == 0 && i != 0) {
+            IV[2]++;
+        }
         padblock = cipher.encrypt(IV);
         cipherbk = sjcl.bitArray._xor4(texblock, padblock);
         cipherbk = sjcl.bitArray.bitSlice(cipherbk, 0, lastblkl);
@@ -197,6 +203,9 @@ function aes128_dec(cipherText, keyString) {
     for (var i = 0; i < numblock; i++) {
         cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128, (i + 1) * 128);
         IV[3] = i;
+        if (IV[3] == 0 && i != 0) {
+            IV[2]++;
+        }
         padblock  = cipher.encrypt(IV);
         plainblk  = sjcl.bitArray._xor4(cipblock, padblock);
         plainbits = sjcl.bitArray.concat(plainbits, plainblk);
@@ -206,6 +215,9 @@ function aes128_dec(cipherText, keyString) {
         cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128);
         lastblkl = sjcl.bitArray.bitLength(cipblock);
         IV[3] = i;
+        if (IV[3] == 0 && i != 0) {
+            IV[2]++;
+        }
         padblock = cipher.encrypt(IV);
         plainblk = sjcl.bitArray._xor4(cipblock, padblock);
         plainblk = sjcl.bitArray.bitSlice(plainblk, 0, lastblkl);
