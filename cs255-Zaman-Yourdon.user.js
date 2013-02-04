@@ -332,8 +332,19 @@ function SaveKeys() {
 function LoadKeys() {
   var pwdsalted = cs255.localStorage.getItem('facebook-pwdsalted-' + my_username);
   if (!pwdsalted) {   // Need to prompt user for password (suppose to be first time)
+                      // Note: the test condition of not having salted password hash
+                      // existing in persistent localStorage being a new user log-in
+                      // with this extension is an ideal case! But during testing we
+                      // found if an active session was left idle till timeout, it's
+                      // localStorage objects disappeared (vs. really lost) for some
+                      // reason (but refresh the same page afterward would have them
+                      // recovered). This exception case would break the simple test
+                      // flow & logic in design here, BUT on the other hand, its not
+                      // worthy to work around or hide (hack) the issue w/o using an
+                      // asynchronous event model. So we decided to keep this simple
+                      // but effective (suppose to be) flow, and instructor agreed:)
     var password = "";
-    while (password == "") { password = prompt("Please create your key database password:"); }
+    while (password == "") { password = prompt("Please create your key database password:\n\n[Note: If it is due to the session idle timeout vs. first time login, please click 'Cancel' button instead, to avoid database inconsistency (hack)!]"); }
     var salt = GetRandomValues(4);
     var pwds = sjcl.codec.utf8String.toBits(password);
     // concat with random salt then hash digest to avoid rainbow table attack!
@@ -365,7 +376,7 @@ function LoadKeys() {
     // if not then prompt user for password validation
     var DBkeyStr = sessionStorage.getItem('facebook-dbkey-' + my_username);
     if (!DBkeyStr) {
-      // Into fresh session but user already set up key database (maybe null) w/ password
+      // Into fresh session but user already set up key database (maybe null entries) w/ password
       // Now we need to validate the user with password
       var password = "";
       while (password == "") { password = prompt("Please confirm your key database password:"); }
