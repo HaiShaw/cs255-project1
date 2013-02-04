@@ -95,4 +95,11 @@ Special note to run project code and facebook functional testing:
         application criteria -assuming underlying sjcl.cipher.aes is an ideal cipher, then with 128bit block/digest size,
         it takes O(2^64) evaluations of AES (E,D) to find a hash collision (the birthday paradox).
 
-        
+    -   For the aes128_hash(), we use Merkle-Damgard Compliant but simple length padding scheme:
+        If message is exact even number of blocks, we add 128bit padding as "1...0||(64Bit length encoding)" at the end.
+        If message does not end w/. block boundry, we first add "1...0" to its last block, then add 128bit padding as
+                                                                            "0...0||(64Bit length encoding)" at the end.
+
+    -   This design of the project is not to prevent active attack, as one user can still remove or overwrite the cipher
+        text data of another user if they happen to share the machine or browser.  Instead the implementaion is designed
+        to prevent passive attack as much as possible, i.e. user can't get any useful info of another even they share PC.
