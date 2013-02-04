@@ -19,6 +19,11 @@ Special note to run project code and facebook functional testing:
         Solution: As a temporary solution, we just prompt user with more made sense messages, so they can click 'Cancel'
                instead of 'OK' to bail out the inconsistency in case of session timeout :)
 
+    -   For return users, at beginning code will prompt for password confirmation. IF it does not pass verfication, code
+        will keep prompt w/o bail out. We believe a more secure way of doing this, is only prompt for a number of times,
+        IF still fail, then go ahead erase all the user related stuff from localStorage and sessionStorage, so user will
+        start over again. This is good in practice, but we did NOT implement this due to time constraint and main focus:)
+
     -   User should never manually add a group key (www.facebook.com/settings) with a string value at their free choice.
         The use case for a user to add a group key through "Add Key" button is when he/she needs to roll-in an exact key
         from group peer (symmetric key),  this key should be given by peer through outbound channel (mail, phone, paper).
@@ -73,7 +78,7 @@ Special note to run project code and facebook functional testing:
         The construct of this approach (used in code) is:
             store ( aes128_hash(user's input password || salt) || salt)     ==> localStorage
         For valiodation, we just need to re-compute and compare the aes128_hash(user's input password || salt) from salt!
-        The construct is believed to be secure enough given the collision resistency from underline secure hash and salt.
+        The construct is believed to be secure enough given the collision resistency from underlying secure hash and salt.
 
     -   With this aes128_hash() in place, we could use another approach to validate user identity through password input,
         that is hash the per user E/D key to the group-keys DataBase (the key derived by pbkdf2) along with a salt, then
@@ -87,7 +92,7 @@ Special note to run project code and facebook functional testing:
 
     -   For the aes128_hash(), we use Merkle-Damgard Construction with Davies-Meyer compression with a fixed IV (128Bit).
         We take that fixed IV from MD5 implementation. 128Bit Digest isn't very long but it seems enough to the facebook
-        application criteria - assuming underline sjcl.cipher.aes is an ideal cipher, then with 128bit block/digest size,
+        application criteria -assuming underlying sjcl.cipher.aes is an ideal cipher, then with 128bit block/digest size,
         it takes O(2^64) evaluations of AES (E,D) to find a hash collision (the birthday paradox).
 
         
