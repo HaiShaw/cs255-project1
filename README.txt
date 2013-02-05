@@ -51,9 +51,9 @@ Special note to run project code and facebook functional testing:
         by facebook through HTTP cookie after facebook server's user login authentication. So that we can have more than
         one users to share the system (namely machine and browser) vs. session, sequentially most likely if there exists.
 
-    -   We choose to store group-keys DataBase as one whole piece (we don't save per group, e.g.) after encryption, but
-        we save a copy of it (differently encrypted as they have different derived DB E/D key) for every user shared the
-        system (machine and browser).
+    -   We chose to store group-keys DataBase one per user (vs. save per group, e.g) as encrypted object in localStorage,
+        we save one object of this (differently encrypted, as every user have different derived DB E/D key, and keys map)
+        for every user sharing the system (machine and browser).
 
     -   We havenot done extensive coding for security even with thought, e.g. plaintext/DB length hiding by padding, etc.
         Given more time, more can be done :)
