@@ -99,18 +99,19 @@ function Decrypt(cipherText, group) {
  * Ideally we should choose deterministic vs. random nonce,
  * but since its hard to track Msg Post ID/Number globally
  * per user per group we chose a random nonce with smaller
- * Sem Security Bound (2^32 Msgs, due to birthday paradox)
+ * Sem Security Bound (2^48 Msgs, due to birthday paradox)
+ * Use 96Bit nonce + 32Bit ctr,32Bit enough for FB msg len.
  * For facebook message App this seems to be enough though.
  */
 function aes128_enc(plainText, keyString) {
     // CTR mode
-    var nonce = GetRandomValues(2);
+    var nonce = GetRandomValues(3);
 
     // Int32 is important, as total should be kept as 128bits
     var IV = new Int32Array(4);
     IV[0] = nonce[0];
     IV[1] = nonce[1];
-    IV[2] = 0;
+    IV[2] = nonce[2];
     IV[3] = 0;
 
     // IV_In is used at last for bitArray concat, Int32Array NOT work!
@@ -139,9 +140,11 @@ function aes128_enc(plainText, keyString) {
     for (var i = 0; i < numblock; i++) {
         texblock = sjcl.bitArray.bitSlice(textbits, i * 128, (i + 1) * 128);
         IV[3] = i;
+        /* OLD code from 64Bit ctr:
         if (IV[3] == 0 && i != 0) {
             IV[2]++;
         }
+        */
         padblock = cipher.encrypt(IV);
         cipherbk = sjcl.bitArray._xor4(texblock, padblock);
         cipherbt = sjcl.bitArray.concat(cipherbt, cipherbk);
@@ -151,9 +154,11 @@ function aes128_enc(plainText, keyString) {
         texblock = sjcl.bitArray.bitSlice(textbits, i * 128);
         lastblkl = sjcl.bitArray.bitLength(texblock);
         IV[3] = i;
+        /* OLD code from 64Bit ctr:
         if (IV[3] == 0 && i != 0) {
             IV[2]++;
         }
+        */
         padblock = cipher.encrypt(IV);
         cipherbk = sjcl.bitArray._xor4(texblock, padblock);
         cipherbk = sjcl.bitArray.bitSlice(cipherbk, 0, lastblkl);
@@ -174,7 +179,8 @@ function aes128_enc(plainText, keyString) {
  * Ideally we should choose deterministic vs. random nonce,
  * but since its hard to track Msg Post ID/Number globally
  * per user per group we chose a random nonce with smaller
- * Sem Security Bound (2^32 Msgs, due to birthday paradox)
+ * Sem Security Bound (2^48 Msgs, due to birthday paradox)
+ * Use 96Bit nonce + 32Bit ctr,32Bit enough for FB msg len.
  * For facebook message App this seems to be enough though.
  */
 function aes128_dec(cipherText, keyString) {
@@ -203,9 +209,11 @@ function aes128_dec(cipherText, keyString) {
     for (var i = 0; i < numblock; i++) {
         cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128, (i + 1) * 128);
         IV[3] = i;
+        /* OLD code from 64Bit ctr:
         if (IV[3] == 0 && i != 0) {
             IV[2]++;
         }
+        */
         padblock  = cipher.encrypt(IV);
         plainblk  = sjcl.bitArray._xor4(cipblock, padblock);
         plainbits = sjcl.bitArray.concat(plainbits, plainblk);
@@ -215,9 +223,11 @@ function aes128_dec(cipherText, keyString) {
         cipblock = sjcl.bitArray.bitSlice(cipherbits, i * 128);
         lastblkl = sjcl.bitArray.bitLength(cipblock);
         IV[3] = i;
+        /* OLD code from 64Bit ctr:
         if (IV[3] == 0 && i != 0) {
             IV[2]++;
         }
+        */
         padblock = cipher.encrypt(IV);
         plainblk = sjcl.bitArray._xor4(cipblock, padblock);
         plainblk = sjcl.bitArray.bitSlice(plainblk, 0, lastblkl);
@@ -345,7 +355,7 @@ function LoadKeys() {
                       // but effective (suppose to be) flow, and instructor agreed:)
     var password = "";
     while (password == "") { password = prompt("Please create your key database password:\n\n[Note: If it is due to the session idle timeout vs. first time login, please click 'Cancel' button instead, to avoid database inconsistency (hack)!]"); }
-    var salt = GetRandomValues(4);
+    var salt = GetRandomValues(8);
     var pwds = sjcl.codec.utf8String.toBits(password);
     // concat with random salt then hash digest to avoid rainbow table attack!
     var pwdsaltBits = sjcl.bitArray.concat(pwds, salt);
@@ -358,7 +368,7 @@ function LoadKeys() {
 
     // Now derive the key database E/D key from user password, then save it to sessionStorage
     // Generate a new salt for DB key derivation! 
-    var keyDBsalt = GetRandomValues(4);
+    var keyDBsalt = GetRandomValues(8);
     var keyDBsalt_str = sjcl.codec.base64.fromBits(keyDBsalt);
     // Generate 128bit key for aes128 E/D implemented in this project w/ max. iteration count
     var DBkeyBit = sjcl.misc.pbkdf2(password, keyDBsalt, null, 128, null);
@@ -390,11 +400,11 @@ function LoadKeys() {
 
       while (pwdsaltDgst != pwd_newDgst) {
         // If password-salt hash digest does NOT match, keep asking for
-	// a valiad password for user validation. For security this should
-	// be limited to only a few number of times (e.g. 10), if still
-	// fail we can choose to erase all persistent data & let user to
-	// roll in again starting fresh new from create key DB password.
-	// But in reality, we kept code simple here. It can be improved!
+        // a valiad password for user validation. For security this should
+        // be limited to only a few number of times (e.g. 10), if still
+        // fail we can choose to erase all persistent data & let user to
+        // roll in again starting fresh new from create key DB password.
+        // But in reality, we kept code simple here. It can be improved!
 
         password = prompt("Wrong password! Please confirm your key database password again:");
         pwds = sjcl.codec.utf8String.toBits(password);
