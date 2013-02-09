@@ -87,8 +87,8 @@ function Decrypt(cipherText, group) {
       var mac_keyStr = sjcl.codec.base64.fromBits(mac_key);
 
       var cipherMsg  = cipherText.slice(7);
-      var ct_macTag  = cipherMsg.split('|').[0];
-      var cipherTxt  = cipherMsg.split('|').[1];
+      var ct_macTag  = cipherMsg.split('|')[0];
+      var cipherTxt  = cipherMsg.split('|')[1];
 
       var nw_macTag  = aes128_mac(cipherTxt, mac_keyStr);
 
@@ -319,7 +319,7 @@ function aes128_mac(msgText, MAC_keyStr) {
     //
 
     var numblock = (raw_msgBitl / 128) >> 0; // Even blocks aft len strength pad
-    var msgblock;
+    var msgblock, inputblk;
     var chainblk = IV;
 
     for (var i = 0; i < numblock; i++) {
@@ -425,8 +425,8 @@ function GenerateKey(group) {
 function SaveKeys() {
 
   var DBkeyStr = sessionStorage.getItem('facebook-dbkey-' + my_username);
-  var DB_enc_keyStr = DBkeyStr.split('|').[0];
-  var DB_mac_keyStr = DBkeyStr.split('|').[1];
+  var DB_enc_keyStr = DBkeyStr.split('|')[0];
+  var DB_mac_keyStr = DBkeyStr.split('|')[1];
   
   // CS255-todo: plaintext keys going to disk?
   //var key_str = JSON.stringify(keys);
@@ -528,8 +528,8 @@ function LoadKeys() {
 
       // Now user's key database password confirmed, now go ahead recover its key database E/D key:
       var DBsalt_str = cs255.localStorage.getItem('facebook-dbkey-salt-' + my_username);
-      var DB_enc_salt_str = DBsalt_str.split('|').[0];
-      var DB_mac_salt_str = DBsalt_str.split('|').[1];
+      var DB_enc_salt_str = DBsalt_str.split('|')[0];
+      var DB_mac_salt_str = DBsalt_str.split('|')[1];
 
       var DB_enc_salt = sjcl.codec.base64.toBits(DB_enc_salt_str);
       var DB_mac_salt = sjcl.codec.base64.toBits(DB_mac_salt_str);
@@ -546,8 +546,8 @@ function LoadKeys() {
       // user input password (not stored anywhere) and DBsalt_str, which is stored persistent
       sessionStorage.setItem('facebook-dbkey-' + my_username, DBkeyStr);
     } else {
-        var DB_enc_keyStr = DBkeyStr.split('|').[0];
-        var DB_mac_keyStr = DBkeyStr.split('|').[1];
+        var DB_enc_keyStr = DBkeyStr.split('|')[0];
+        var DB_mac_keyStr = DBkeyStr.split('|')[1];
     }
   }
 
@@ -564,8 +564,8 @@ function LoadKeys() {
     // CS255-todo: plaintext keys were on disk?
     //var key_str = saved;
 
-    var key_tag = saved.split('|').[0];
-    var key_str = saved.split('|').[1];
+    var key_tag = saved.split('|')[0];
+    var key_str = saved.split('|')[1];
     assert(key_str && key_tag, "facebook message keys database tampered for the user:" + my_username);
 
     var new_tag = aes128_mac(key_str, DB_mac_keyStr);
@@ -806,7 +806,7 @@ function AddEncryptionTab() {
       table.setAttribute('cellpadding', 3);
       table.setAttribute('cellspacing', 1);
       table.setAttribute('border', 1);
-      table.setAttribute('width', "80%");
+      table.setAttribute('width', "100%");
       div.appendChild(table);
 
       var clearSessionStorage = document.createElement('button');
