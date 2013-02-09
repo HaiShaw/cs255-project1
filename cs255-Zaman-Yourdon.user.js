@@ -425,21 +425,22 @@ function GenerateKey(group) {
 function SaveKeys() {
 
   var DBkeyStr = sessionStorage.getItem('facebook-dbkey-' + my_username);
-  var DB_enc_keyStr = DBkeyStr.split('|')[0];
-  var DB_mac_keyStr = DBkeyStr.split('|')[1];
+  if (DBkeyStr) {
+    var DB_enc_keyStr = DBkeyStr.split('|')[0];
+    var DB_mac_keyStr = DBkeyStr.split('|')[1];
   
-  // CS255-todo: plaintext keys going to disk?
-  //var key_str = JSON.stringify(keys);
-  var key_str = aes128_enc(JSON.stringify(keys), DB_enc_keyStr);
-  var key_tag = aes128_mac(key_str, DB_mac_keyStr);
+    // CS255-todo: plaintext keys going to disk?
+    //var key_str = JSON.stringify(keys);
+    var key_str = aes128_enc(JSON.stringify(keys), DB_enc_keyStr);
+    var key_tag = aes128_mac(key_str, DB_mac_keyStr);
 
-  // we can do this because '|' is not a base64 char!
-  // keep MAC TAG in front to avoid missing MAC TAG from truncated authenticated msg !
-  key_str = key_tag + '|' + key_str;
+    // we can do this because '|' is not a base64 char!
+    // keep MAC TAG in front to avoid missing MAC TAG from truncated authenticated msg !
+    key_str = key_tag + '|' + key_str;
 
-  //localStorage.setItem('facebook-keys-' + my_username, encodeURIComponent(key_str));
-  cs255.localStorage.setItem('facebook-keys-' + my_username, key_str);
-  //cs255.localStorage.getItem('facebook-keys-' + my_username);
+    //localStorage.setItem('facebook-keys-' + my_username, encodeURIComponent(key_str));
+    cs255.localStorage.setItem('facebook-keys-' + my_username, key_str);
+  }
 }
 
 // Load the group keys from disk.
@@ -546,8 +547,8 @@ function LoadKeys() {
       // user input password (not stored anywhere) and DBsalt_str, which is stored persistent
       sessionStorage.setItem('facebook-dbkey-' + my_username, DBkeyStr);
     } else {
-        var DB_enc_keyStr = DBkeyStr.split('|')[0];
-        var DB_mac_keyStr = DBkeyStr.split('|')[1];
+      var DB_enc_keyStr = DBkeyStr.split('|')[0];
+      var DB_mac_keyStr = DBkeyStr.split('|')[1];
     }
   }
 
