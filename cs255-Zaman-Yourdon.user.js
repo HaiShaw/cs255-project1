@@ -43,9 +43,19 @@ function Encrypt(plainText, group) {
     return plainText;
   } else {
     // encrypt, add tag.
-    key = keys[group];
+    var key = keys[group];
     if (key) {
-      return 'aes128:' + aes128_enc(plainText, key);
+      var keyBits = sjcl.codec.base64.toBits(key);
+      var enc_key = sjcl.bitArray.bitSlice(keyBits, 0, 128);
+      var mac_key = sjcl.bitArray.bitSlice(keyBits, 128, 384);
+
+      var enc_keyStr = sjcl.codec.base64.fromBits(enc_key);
+      var mac_keyStr = sjcl.codec.base64.fromBits(mac_key);
+
+      var cipherText = aes128_enc(plainText,  enc_keyStr);
+      var ct_macTag  = aes128_mac(cipherText, mac_keyStr);
+
+      return 'aes128:' + ct_macTag + '|' + cipherText;
     } else {  // in case the group's key getting deleted. 
       alert("Group key does NOT exist, no encryption done!");
       return plainText;
@@ -67,13 +77,33 @@ function Decrypt(cipherText, group) {
   if (cipherText.indexOf('aes128:') == 0) {
 
     // decrypt, ignore the tag.
-    key = keys[group];
+    var key = keys[group];
     if (key) {
-      var decryptedMsg = aes128_dec(cipherText.slice(7), key);
-      return decryptedMsg;
+      var keyBits = sjcl.codec.base64.toBits(key);
+      var enc_key = sjcl.bitArray.bitSlice(keyBits, 0, 128);
+      var mac_key = sjcl.bitArray.bitSlice(keyBits, 128, 384);
+
+      var enc_keyStr = sjcl.codec.base64.fromBits(enc_key);
+      var mac_keyStr = sjcl.codec.base64.fromBits(mac_key);
+
+      var cipherMsg  = cipherText.slice(7);
+      var ct_macTag  = cipherMsg.split('|').[0];
+      var cipherTxt  = cipherMsg.split('|').[1];
+
+      var nw_macTag  = aes128_mac(cipherTxt, mac_keyStr);
+
+      if (ct_macTag == nw_macTag) {
+          var decryptedMsg = aes128_dec(cipherTxt, enc_keyStr);
+          return decryptedMsg;
+      } else {
+          // alert("message authentication failed!");
+          return "[Message Authentication Fail! No decryption done!]\n";
+      }
+
+
     } else {
       // alert("Group key does NOT exist, no decryption done!");
-      return "[Group key does NOT exist, no decryption done!]\n" + cipherText;
+      return "[Group key does NOT exist, no decryption done!]\n";
     }
 
   } else {
@@ -86,8 +116,10 @@ function Decrypt(cipherText, group) {
 // AES
 // Encryption
 // Decryption
+// ECBC-MAC
 // crytographic hash
 // Implementation
+//
 // @ Have NOT made counter 64 bits, for facebook messaging 32bit ctr seems enough
 // @ For every message change nonce!
 /*
@@ -239,6 +271,69 @@ function aes128_dec(cipherText, keyString) {
 }
 
 
+/*
+ * Encryption-then-MAC mode :=> Then this function should be
+ * called with ciphertext. Implement ECBC-MAC using sjcl.aes
+ *
+ * @param  {string} msgText    is base64 codec (not expect ASCII/UTF8S)
+ * @param  {string} MAC_keyStr is base64 codec (2x128Bit ECBC-MAC keys)
+ * @return {string} eCBCmacTag is base64 codec (  128Bit )
+ *
+ * ECBC-MAC using AES128
+ */
+function aes128_mac(msgText, MAC_keyStr) {
+
+    var macKeys = sjcl.codec.base64.toBits(MAC_keyStr);
+    var cbc_Key = sjcl.bitArray.bitSlice(macKeys, 0, 128);
+    var lastKey = sjcl.bitArray.bitSlice(macKeys, 128, 256);
+
+    var msgBits = sjcl.codec.base64.toBits(msgText);
+    var msgBitl = sjcl.bitArray.bitLength(msgBits);
+
+    // Padding Template (not ISO standard: '1...0'; we also add msg Len)
+    var PT = new Int32Array(4);
+    PT = [0x80000000, 0x00000000, 0x00000000, 0x00000000];
+
+    var PB = new Int32Array(4);
+    var rm = msgBitl % 128;
+    if (rm == 0) {  //    bit shift is tricky (unsigned >>>32 doesn't change val)
+        PB = [0x80000000, 0x00000000, msgBitl >>> 31 >> 1, msgBitl & 0xffffffff];
+    } else {
+        PB = [0x00000000, 0x00000000, msgBitl >>> 31 >> 1, msgBitl & 0xffffffff];
+        var subpad = sjcl.bitArray.bitSlice(PT, 0, 128 - rm);
+        msgBits = sjcl.bitArray.concat(msgBits, subpad);
+    }
+
+    //  raw_msgBits: padded (up to even 128Bit blocks) msg bitArray!
+    var raw_msgBits = sjcl.bitArray.concat(msgBits, PB);
+    var raw_msgBitl = sjcl.bitArray.bitLength(raw_msgBits);
+
+    // Take fixed IV{0} 128Bit 
+    var IV = new Int32Array(4);
+    IV = [0x00000000, 0x00000000, 0x00000000, 0x00000000];
+
+    var cipher = new sjcl.cipher.aes(cbc_Key);
+
+    // each Int32 range from 0 => 2^32-1 (4294967295 == -1)
+    // so from signed values it goes from 0 => 2147483647, -2147483648, ... , -1
+    //
+
+    var numblock = (raw_msgBitl / 128) >> 0; // Even blocks aft len strength pad
+    var msgblock;
+    var chainblk = IV;
+
+    for (var i = 0; i < numblock; i++) {
+        msgblock = sjcl.bitArray.bitSlice(raw_msgBits, i * 128, (i + 1) * 128);
+        inputblk = sjcl.bitArray._xor4(msgblock, chainblk);
+        chainblk = cipher.encrypt(inputblk);
+    }
+
+    // Now encrypt the chainblk using the 2nd Key:
+    cipher  = new sjcl.cipher.aes(lastKey);
+    var tagBits = cipher.encrypt(chainblk);
+
+    return sjcl.codec.base64.fromBits(tagBits);
+}
 
 
 /*
@@ -305,6 +400,7 @@ function aes128_hash(msgText) {
 //
 // Implementation
 // cryptographic hash
+// ECBC-MAC
 // Decryption
 // Encryption
 // AES
@@ -318,7 +414,8 @@ function GenerateKey(group) {
 
   // CS255-todo: Well this needs some work...
   // var key = 'CS255-todo';
-  var key = sjcl.codec.base64.fromBits(GetRandomValues(4));
+  // Need 3 x 128Bit keys, 1 for E/D, 2 for ECBC-MAC (k, k1)
+  var key = sjcl.codec.base64.fromBits(GetRandomValues(12));
 
   keys[group] = key;
   SaveKeys();
@@ -328,10 +425,17 @@ function GenerateKey(group) {
 function SaveKeys() {
 
   var DBkeyStr = sessionStorage.getItem('facebook-dbkey-' + my_username);
+  var DB_enc_keyStr = DBkeyStr.split('|').[0];
+  var DB_mac_keyStr = DBkeyStr.split('|').[1];
   
   // CS255-todo: plaintext keys going to disk?
   //var key_str = JSON.stringify(keys);
-  var key_str = aes128_enc(JSON.stringify(keys), DBkeyStr);
+  var key_str = aes128_enc(JSON.stringify(keys), DB_enc_keyStr);
+  var key_tag = aes128_mac(key_str, DB_mac_keyStr);
+
+  // we can do this because '|' is not a base64 char!
+  // keep MAC TAG in front to avoid missing MAC TAG from truncated authenticated msg !
+  key_str = key_tag + '|' + key_str;
 
   //localStorage.setItem('facebook-keys-' + my_username, encodeURIComponent(key_str));
   cs255.localStorage.setItem('facebook-keys-' + my_username, key_str);
@@ -367,21 +471,31 @@ function LoadKeys() {
     cs255.localStorage.setItem('facebook-pwdsalted-' + my_username, pwdSalt_str);
 
     // Now derive the key database E/D key from user password, then save it to sessionStorage
-    // Generate a new salt for DB key derivation! 
-    var keyDBsalt = GetRandomValues(8);
-    var keyDBsalt_str = sjcl.codec.base64.fromBits(keyDBsalt);
+    // Generate a new salt for DB E/D key derivation! 
+    var DB_enc_salt = GetRandomValues(8);
+    var DB_enc_salt_str = sjcl.codec.base64.fromBits(DB_enc_salt);
     // Generate 128bit key for aes128 E/D implemented in this project w/ max. iteration count
-    var DBkeyBit = sjcl.misc.pbkdf2(password, keyDBsalt, null, 128, null);
-    var DBkeyStr = sjcl.codec.base64.fromBits(DBkeyBit);
+    var DB_enc_key = sjcl.misc.pbkdf2(password, DB_enc_salt, null, 128, null);
 
+    // Now derive the key database MAC key from user password, then save it to sessionStorage
+    // Generate a new salt for DB MAC key derivation! 
+    var DB_mac_salt = GetRandomValues(8);
+    var DB_mac_salt_str = sjcl.codec.base64.fromBits(DB_mac_salt);
+    // Generate 2x128bit key for aes128_mac implemented in this project w/ max. iteration count
+    var DB_mac_key = sjcl.misc.pbkdf2(password, DB_mac_salt, null, 256, null);
+
+    var DB_enc_keyStr = sjcl.codec.base64.fromBits(DB_enc_key);
+    var DB_mac_keyStr = sjcl.codec.base64.fromBits(DB_mac_key);
+    var DBkeyStr = DB_enc_keyStr + '|' + DB_mac_keyStr;
     // Now save DBkeyStr to sessionStorage, we can NOT save this to persistent storage for security!
     sessionStorage.setItem('facebook-dbkey-' + my_username, DBkeyStr);
 
-    // Also save keyDBsalt_str in persistent storage for later password validation & dbkey recover!
-    cs255.localStorage.setItem('facebook-dbkey-salt-' + my_username, keyDBsalt_str);
+    var DBsalt_str = DB_enc_salt_str + '|' + DB_mac_salt_str;
+    // Also save DBsalt_str in persistent storage for later password validation & dbkey recover!
+    cs255.localStorage.setItem('facebook-dbkey-salt-' + my_username, DBsalt_str);
 
   } else {
-    // first check if key database E/D key exists in sessionStorage, 
+    // first check if key database E/D/MAC key exists in sessionStorage, 
     // if it exists, then just use it as it is (so )
     // if not then prompt user for password validation
     var DBkeyStr = sessionStorage.getItem('facebook-dbkey-' + my_username);
@@ -413,19 +527,31 @@ function LoadKeys() {
       }
 
       // Now user's key database password confirmed, now go ahead recover its key database E/D key:
-      var keyDBsalt_str = cs255.localStorage.getItem('facebook-dbkey-salt-' + my_username);
-      var keyDBsalt = sjcl.codec.base64.toBits(keyDBsalt_str);
-      var DBkeyBit = sjcl.misc.pbkdf2(password, keyDBsalt, null, 128, null);
-      DBkeyStr = sjcl.codec.base64.fromBits(DBkeyBit);
+      var DBsalt_str = cs255.localStorage.getItem('facebook-dbkey-salt-' + my_username);
+      var DB_enc_salt_str = DBsalt_str.split('|').[0];
+      var DB_mac_salt_str = DBsalt_str.split('|').[1];
+
+      var DB_enc_salt = sjcl.codec.base64.toBits(DB_enc_salt_str);
+      var DB_mac_salt = sjcl.codec.base64.toBits(DB_mac_salt_str);
+
+      var DB_enc_key = sjcl.misc.pbkdf2(password, DB_enc_salt, null, 128, null);
+      var DB_mac_key = sjcl.misc.pbkdf2(password, DB_mac_salt, null, 256, null);
+
+      var DB_enc_keyStr = sjcl.codec.base64.fromBits(DB_enc_key);
+      var DB_mac_keyStr = sjcl.codec.base64.fromBits(DB_mac_key);
+      DBkeyStr = DB_enc_keyStr + '|' + DB_mac_keyStr;
 
       // Now save DBkeyStr to sessionStorage, we can NOT save this to persistent storage for security!
-      // But this DBkeyStr should be consistent across sessions, this is uniquely decided by
-      // user input password (not stored anywhere) and keyDBsalt, which is stored persistent
+      // But this DBkeyStr should be consistent across sessions,  this is uniquely decided by
+      // user input password (not stored anywhere) and DBsalt_str, which is stored persistent
       sessionStorage.setItem('facebook-dbkey-' + my_username, DBkeyStr);
+    } else {
+        var DB_enc_keyStr = DBkeyStr.split('|').[0];
+        var DB_mac_keyStr = DBkeyStr.split('|').[1];
     }
   }
 
-  // DBkeyStr now contains the valid (user's) key database E/D key.
+  // DBkeyStr now contains the valid (user's) key database E/D & MAC key.
   // Again it is never stored in persistent storage for DB security!
 
   keys = {}; // Reset the keys.
@@ -437,7 +563,15 @@ function LoadKeys() {
     //var key_str = decodeURIComponent(saved);
     // CS255-todo: plaintext keys were on disk?
     //var key_str = saved;
-    var key_str = aes128_dec(saved, DBkeyStr);
+
+    var key_tag = saved.split('|').[0];
+    var key_str = saved.split('|').[1];
+    assert(key_str && key_tag, "facebook message keys database tampered for the user:" + my_username);
+
+    var new_tag = aes128_mac(key_str, DB_mac_keyStr);
+    assert(new_tag == key_tag, "facebook message keys database tampered for the user:" + my_username);
+
+    key_str = aes128_dec(key_str, DB_enc_keyStr);
     keys = JSON.parse(key_str);
   }
 }
