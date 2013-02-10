@@ -460,40 +460,43 @@ function LoadKeys() {
                       // but effective (suppose to be) flow, and instructor agreed:)
     var password = "";
     while (password == "") { password = prompt("Please create your key database password:\n\n[Note: If it is due to the session idle timeout vs. first time login, please click 'Cancel' button instead, to avoid database inconsistency (hack)!]"); }
-    var salt = GetRandomValues(8);
-    var pwds = sjcl.codec.utf8String.toBits(password);
-    // concat with random salt then hash digest to avoid rainbow table attack!
-    var pwdsaltBits = sjcl.bitArray.concat(pwds, salt);
-    var pwdsaltDgst = aes128_hash(sjcl.codec.base64.fromBits(pwdsaltBits));
-    var salt_String = sjcl.codec.base64.fromBits(salt);
-    // '|' is not one of the base64 char, so use here.
-    var pwdSalt_str = pwdsaltDgst + '|' + salt_String;
-    // Save password salted hash string in persistent storage, for later password validation
-    cs255.localStorage.setItem('facebook-pwdsalted-' + my_username, pwdSalt_str);
+    if (password) {   // Fix an issue of 'Cancel'-hit in password prompt above gets out while-loop with 'password == null';
+                      // Under the criteria, cont. code block below causes user identity & database inconsistencies later! 
+      var salt = GetRandomValues(8);
+      var pwds = sjcl.codec.utf8String.toBits(password);
+      // concat with random salt then hash digest to avoid rainbow table attack!
+      var pwdsaltBits = sjcl.bitArray.concat(pwds, salt);
+      var pwdsaltDgst = aes128_hash(sjcl.codec.base64.fromBits(pwdsaltBits));
+      var salt_String = sjcl.codec.base64.fromBits(salt);
+      // '|' is not one of the base64 char, so use here.
+      var pwdSalt_str = pwdsaltDgst + '|' + salt_String;
+      // Save password salted hash string in persistent storage, for later password validation
+      cs255.localStorage.setItem('facebook-pwdsalted-' + my_username, pwdSalt_str);
 
-    // Now derive the key database E/D key from user password, then save it to sessionStorage
-    // Generate a new salt for DB E/D key derivation! 
-    var DB_enc_salt = GetRandomValues(8);
-    var DB_enc_salt_str = sjcl.codec.base64.fromBits(DB_enc_salt);
-    // Generate 128bit key for aes128 E/D implemented in this project w/ max. iteration count
-    var DB_enc_key = sjcl.misc.pbkdf2(password, DB_enc_salt, null, 128, null);
+      // Now derive the key database E/D key from user password, then save it to sessionStorage
+      // Generate a new salt for DB E/D key derivation! 
+      var DB_enc_salt = GetRandomValues(8);
+      var DB_enc_salt_str = sjcl.codec.base64.fromBits(DB_enc_salt);
+      // Generate 128bit key for aes128 E/D implemented in this project w/ max. iteration count
+      var DB_enc_key = sjcl.misc.pbkdf2(password, DB_enc_salt, null, 128, null);
 
-    // Now derive the key database MAC key from user password, then save it to sessionStorage
-    // Generate a new salt for DB MAC key derivation! 
-    var DB_mac_salt = GetRandomValues(8);
-    var DB_mac_salt_str = sjcl.codec.base64.fromBits(DB_mac_salt);
-    // Generate 2x128bit key for aes128_mac implemented in this project w/ max. iteration count
-    var DB_mac_key = sjcl.misc.pbkdf2(password, DB_mac_salt, null, 256, null);
+      // Now derive the key database MAC key from user password, then save it to sessionStorage
+      // Generate a new salt for DB MAC key derivation! 
+      var DB_mac_salt = GetRandomValues(8);
+      var DB_mac_salt_str = sjcl.codec.base64.fromBits(DB_mac_salt);
+      // Generate 2x128bit key for aes128_mac implemented in this project w/ max. iteration count
+      var DB_mac_key = sjcl.misc.pbkdf2(password, DB_mac_salt, null, 256, null);
 
-    var DB_enc_keyStr = sjcl.codec.base64.fromBits(DB_enc_key);
-    var DB_mac_keyStr = sjcl.codec.base64.fromBits(DB_mac_key);
-    var DBkeyStr = DB_enc_keyStr + '|' + DB_mac_keyStr;
-    // Now save DBkeyStr to sessionStorage, we can NOT save this to persistent storage for security!
-    sessionStorage.setItem('facebook-dbkey-' + my_username, DBkeyStr);
+      var DB_enc_keyStr = sjcl.codec.base64.fromBits(DB_enc_key);
+      var DB_mac_keyStr = sjcl.codec.base64.fromBits(DB_mac_key);
+      var DBkeyStr = DB_enc_keyStr + '|' + DB_mac_keyStr;
+      // Now save DBkeyStr to sessionStorage, we can NOT save this to persistent storage for security!
+      sessionStorage.setItem('facebook-dbkey-' + my_username, DBkeyStr);
 
-    var DBsalt_str = DB_enc_salt_str + '|' + DB_mac_salt_str;
-    // Also save DBsalt_str in persistent storage for later password validation & dbkey recover!
-    cs255.localStorage.setItem('facebook-dbkey-salt-' + my_username, DBsalt_str);
+      var DBsalt_str = DB_enc_salt_str + '|' + DB_mac_salt_str;
+      // Also save DBsalt_str in persistent storage for later password validation & dbkey recover!
+      cs255.localStorage.setItem('facebook-dbkey-salt-' + my_username, DBsalt_str);
+    }
 
   } else {
     // first check if key database E/D/MAC key exists in sessionStorage, 
