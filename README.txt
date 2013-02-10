@@ -6,6 +6,13 @@ Project Group Members:  Hai Xiao            SUNetID: haixiao
                         Amit Chattopadhyay           amitch
 
 
+Main Helper Functions Implemented:
+    -   aes128_enc()
+    -   aes128_dec()
+    -   aes128_hash()
+    -   aes128_mac()
+
+
 Special note to run project code and facebook functional testing:
 
     -   Just as handout requires, user needs to create an key-DB password at login if it is the 1st time after extension
@@ -54,8 +61,8 @@ Special note to run project code and facebook functional testing:
     -   All salts are moved to 256Bit with stronger entropy, main salts are: user password hash salt, salt for deriving
         user's key-DB E/D key, salt for deriving user's key-DB MAC key.
 
-    -   Use pbkdf2 to derive per user group-keys DataBase E/D key and MAC keys separately from user password;  and using
-        different salts.
+    -   Use pbkdf2 to derive per user group-keys DataBase E/D key (128Bit) and MAC keys (2x128Bit) separately from user
+        password, with different salts.
 
     -   User password is the ultimate to validate an user, so it's never saved anywhere neither local or session Storage.
         To validate a revisiting user, we have to save its password salt (random) out to persistent localStorage.
@@ -89,7 +96,13 @@ Special note to run project code and facebook functional testing:
         and cipher key may only need a change after every 2^48 messages (due to the 96Bit random nonce & birthday paradox)
         It is clear none of these limition is a real concern to this project, for 1) facebook message len is very limited
         (Post < 10,000 chars, Comment < 8,000 chars);  2) 2^48 messages could be more than a number any group can ever do!
-        So this construct should work fine, and no cipher key (a group's messaging key) renew are required.
+        So this construct should work fine, and no cipher key (a group's messaging key) renew is required.
+        (Milestone 2: we moved random nonce from 64Bit to 96Bit to achieve a better Many-Time CPA Sem. Sec. error term)
+
+    -   Random Nonce Counter Mode: It fits group messaging well due to stateless and multiple parties environment (using
+        ONE key); It may not be perfect fit for user's key database encryption, as different users have different keys,
+        but since we don't know much about the underlying browser's exact interaction with storage (disk), we think use
+        random nonce may be better to mitigate attack than to use det. nonce (to single user's DB security perspective).   
 
     -   We also build a crypto/secure hash (128Bit AES key) using sjcl.cipher.aes constructs, this hash generates 128Bit
         digest (due to relatively small 128Bit AES block size). It is used to hash(password||salt) to validate an user's
@@ -121,7 +134,30 @@ Special note to run project code and facebook functional testing:
         If message does not end w/. block boundry, we first add "1...0" to its last block, then add 128Bit padding as
                                                                             "0...0||(64Bit length encoding)" at the end.
 
+    -   To satisfy Milestone 2 requirement, we also build ECBC-MAC aes128_mac() using sjcl.cipher.aes primitive. We use
+        it to add message integrity on top of Milestone 1 functions. Specifically we use it authenticate group messages,
+        and user's groups-keys database between program runs.
+
+    -   To build aes128_mac(), we use two 128Bit keys to the component PRFs (aes128), one key to CBC, one key to final.
+        We use IV = {0}^128 as standard. We also apply Merkle-Damgard Compliant Length Padding Scheme to messages (see
+        above, same as in aes128_hash)
+
+    -   To achieve Milestone 2 message integrity, we always use Encryption-then-MAC Authenticated Encryption scheme! We
+        use aes128_enc() to encrypt, then aes128_mac() to apply message auth code; In reverse path, we use aes128_mac()
+        to authenticate the ciphertext (recompute and compare the TAG), then use aes128_dec() to decrypt if auth pass!
+
+    -   Always need 384Bit KEY material (1x128Bit Encryption/Decryption KEY; 2x128Bit MAC KEYs) to run implemented AE.
+
+    -   For AE (Authenticated Encryption) we always concatenate the ciphertext and MAC-TAG into one stream. MAC-TAG is
+        always prepended (at the beginning) to the ciphertext (due to very limited MAC-TAG length [128Bit] vs. various
+        length ciphertext) in our case, to make sure MAC-TAG is always available regardless ciphertext completeness.
+        We also use '|' as the delimiter to concatenate MAC-TAG & ciphertext, as both MAC-TAG & CT are base64 encoded,
+        and '|' is NOT  an base64 CHAR!
+
+    -   We have not coded enough to avoid timing-attack, for example MAC-TAG comparison, etc. should be strengthened!
+
     -   This design of the project is not to prevent active attack, as one user can still remove or overwrite the cipher
         text data of another user if they happen to share the machine or browser.  Instead the implementaion is designed
         to prevent passive attack as much as possible, i.e. user can't get any useful info of another even they share PC.
+        But with message integrity build from Milestone 2, some of the active attacks can be detected!
 

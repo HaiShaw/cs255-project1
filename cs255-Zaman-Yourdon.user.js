@@ -92,6 +92,7 @@ function Decrypt(cipherText, group) {
 
       var nw_macTag  = aes128_mac(cipherTxt, mac_keyStr);
 
+      // No good for timing attack!
       if (ct_macTag == nw_macTag) {
           var decryptedMsg = aes128_dec(cipherTxt, enc_keyStr);
           return decryptedMsg;
@@ -575,6 +576,7 @@ function LoadKeys() {
     assert(key_str && key_tag, "facebook message keys database tampered for the user:" + my_username);
 
     var new_tag = aes128_mac(key_str, DB_mac_keyStr);
+    // No good for timing attack!
     assert(new_tag == key_tag, "facebook message keys database tampered for the user:" + my_username);
 
     key_str = aes128_dec(key_str, DB_enc_keyStr);
