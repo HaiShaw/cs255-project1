@@ -17,8 +17,20 @@ Special note to run project code and facebook functional testing:
                would break the simple assumption that user would not need to re-enter password in a session except at its
                beginning. But we decide not to fix this exceptional case, in favor of keeping the code logic simple/clear.
         Solution: As a temporary solution, we just prompt user with more made sense messages so they could click 'Cancel'
-               instead of 'OK' to bail out the database inconsistency in case of session timeout :)  There are times you
+               instead of 'OK' (whenever user is improperly prompted to create database password AGAIN due to underlying
+               localStorage bug) to bail out the database inconsistency in case of session timeout:) There are times you
                need an extra refresh on group page to have encrypted messages show up correctly, due to race conditions!
+
+    -   Milestone 2 fixed an issue of leaving user identification and database inconsistency due to salts be regenerated
+        improperly even when 'password == null',  in the circumstance that 'Cancel' was chosen at password prompt due to
+        prior (bullet above) suggested work around to idle session timeout. The fix is just not to re-generate salts and
+        database key materials if user bail out the password prompt loop with 'Cancel', or when password is set to null!
+        The underlying issue of disappearing localStorage object from session idle timeout isn't addressed. But we still
+        try to make safer code & keep functions consistent. Root cause isn't really exposed if there is not localStorage
+        problem at first place, and 'Cancel' as solution to the overloaded user password creation prompt as consequence.
+        (So now just remember to click 'Cancel' at password creation window if you had already created earlier, you can
+        do this either from refreshing a session page that is idle timeout, or from starting a new session if its prior
+        was idle timeout and closed improperly. Whatsoever you will later be directed to prompt for confirming password:)
 
     -   For return users, at beginning code will prompt for password confirmation. IF it does not pass verfication, code
         will keep prompt w/o bail out. We believe a more secure way of doing this, is only prompt for a number of times,
@@ -113,4 +125,3 @@ Special note to run project code and facebook functional testing:
         text data of another user if they happen to share the machine or browser.  Instead the implementaion is designed
         to prevent passive attack as much as possible, i.e. user can't get any useful info of another even they share PC.
 
-    -   There are times you need to refresh a group page to have encrypted messages show up correctly.

@@ -459,9 +459,11 @@ function LoadKeys() {
                       // asynchronous event model. So we decided to keep this simple
                       // but effective (suppose to be) flow, and instructor agreed:)
     var password = "";
-    while (password == "") { password = prompt("Please create your key database password:\n\n[Note: If it is due to the session idle timeout vs. first time login, please click 'Cancel' button instead, to avoid database inconsistency (hack)!]"); }
+    while (password == "") { password = prompt("Please create your groups-keys database password:\n\n[Note: If due to session idle timeout vs. first time login (or you already had password created) please click 'Cancel' to bail-out, to avoid database inconsistency (hack)!]"); }
     if (password) {   // Fix an issue of 'Cancel'-hit in password prompt above gets out while-loop with 'password == null';
-                      // Under the criteria, cont. code block below causes user identity & database inconsistencies later! 
+                      // Under the criteria, cont. code block below causes user identity & database inconsistencies later!
+                      // (because of unexpectedly re-generated salts and key materials!)
+
       var salt = GetRandomValues(8);
       var pwds = sjcl.codec.utf8String.toBits(password);
       // concat with random salt then hash digest to avoid rainbow table attack!
