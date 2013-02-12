@@ -37,7 +37,7 @@ var keys = {}; // association map of keys: group -> key
 // @return {String} Encryption of the plaintext, encoded as a string.
 function Encrypt(plainText, group) {
   // CS255-todo: encrypt the plainText, using key for the group.
-  if ((plainText.indexOf('aes128:') == 0) || (plainText.length < 1)) {
+  if ((plainText.indexOf('aes128:') == 0) || (plainText.length < 0)) {
     // already done, or blank
     alert("Try entering a message (the button works only once)");
     return plainText;
