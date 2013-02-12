@@ -392,7 +392,7 @@ function aes128_hash(msgText) {
     for (var i = 0; i < numblock; i++) {
         keyblock = sjcl.bitArray.bitSlice(raw_msgBits, i * 128, (i + 1) * 128);
         var cipher = new sjcl.cipher.aes(keyblock);
-        H0 = cipher.encrypt(H0);
+        H0 = sjcl.bitArray._xor4(cipher.encrypt(H0), H0);
     }
     return sjcl.codec.base64.fromBits(H0);
 }
