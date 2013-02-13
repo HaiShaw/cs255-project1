@@ -464,6 +464,8 @@ function LoadKeys() {
     if (password) {   // Fix an issue of 'Cancel'-hit in password prompt above gets out while-loop with 'password == null';
                       // Under the criteria, cont. code block below causes user identity & database inconsistencies later!
                       // (because of unexpectedly re-generated salts and key materials!)
+                      // Fix to (password == null) check seems more proper in while cond
+                      // But we do here(buggy) to allow 'Cancel' refresh at idel timeout
 
       // Now derive the key database E/D key from user password, then save it to sessionStorage
       // Generate a new salt for DB E/D key derivation! 
@@ -576,7 +578,7 @@ function LoadKeys() {
   // saved will contain the encrypted cipherText of user's group-key database.
   var saved = cs255.localStorage.getItem('facebook-keys-' + my_username);
 
-  if (saved) {
+  if (saved && DB_mac_keyStr && DB_enc_keyStr) {
     //var key_str = decodeURIComponent(saved);
     // CS255-todo: plaintext keys were on disk?
     //var key_str = saved;
