@@ -446,9 +446,9 @@ function SaveKeys() {
 
 // Load the group keys from disk.
 function LoadKeys() {
-  var pwdsalted = cs255.localStorage.getItem('facebook-pwdsalted-' + my_username);
-  if (!pwdsalted) {   // Need to prompt user for password (suppose to be first time)
-                      // Note: the test condition of not having salted password hash
+  var keysalted = cs255.localStorage.getItem('facebook-keysalted-' + my_username);
+  if (!keysalted) {   // Need to prompt user for password (suppose to be first time)
+                      // Note: the test condition of not having a salted dbkeys hash
                       // existing in persistent localStorage being a new user log-in
                       // with this extension is an ideal case! But during testing we
                       // found if an active session was left idle till timeout, it's
@@ -464,17 +464,6 @@ function LoadKeys() {
     if (password) {   // Fix an issue of 'Cancel'-hit in password prompt above gets out while-loop with 'password == null';
                       // Under the criteria, cont. code block below causes user identity & database inconsistencies later!
                       // (because of unexpectedly re-generated salts and key materials!)
-
-      var salt = GetRandomValues(8);
-      var pwds = sjcl.codec.utf8String.toBits(password);
-      // concat with random salt then hash digest to avoid rainbow table attack!
-      var pwdsaltBits = sjcl.bitArray.concat(pwds, salt);
-      var pwdsaltDgst = aes128_hash(sjcl.codec.base64.fromBits(pwdsaltBits));
-      var salt_String = sjcl.codec.base64.fromBits(salt);
-      // '|' is not one of the base64 char, so use here.
-      var pwdSalt_str = pwdsaltDgst + '|' + salt_String;
-      // Save password salted hash string in persistent storage, for later password validation
-      cs255.localStorage.setItem('facebook-pwdsalted-' + my_username, pwdSalt_str);
 
       // Now derive the key database E/D key from user password, then save it to sessionStorage
       // Generate a new salt for DB E/D key derivation! 
@@ -499,6 +488,22 @@ function LoadKeys() {
       var DBsalt_str = DB_enc_salt_str + '|' + DB_mac_salt_str;
       // Also save DBsalt_str in persistent storage for later password validation & dbkey recover!
       cs255.localStorage.setItem('facebook-dbkey-salt-' + my_username, DBsalt_str);
+
+
+      // Generate salt for secure aes128_hash(PBKDF2 derived keys||salt)
+      var salt = GetRandomValues(8);
+
+      // Now construct & store a secure hash of the derived keys along with the salt (suggestion)
+      // concat PBKDF2 derived keys with random salt ==> hash digest, avoid rainbow table attack!
+      var keysaltBits = sjcl.bitArray.concat(DB_enc_key, DB_mac_key);
+      keysaltBits = sjcl.bitArray.concat(keysaltBits, salt);
+      var keysaltDgst = aes128_hash(sjcl.codec.base64.fromBits(keysaltBits));
+      var salt_String = sjcl.codec.base64.fromBits(salt);
+      // '|' is not one of the base64 char, so use here.
+      var keySalt_str = keysaltDgst + '|' + salt_String;
+      // Save PBKDF2 derived key's salted hash string in persistent storage, for password verify
+      cs255.localStorage.setItem('facebook-keysalted-' + my_username, keySalt_str);
+
     }
 
   } else {
@@ -507,43 +512,48 @@ function LoadKeys() {
     // if not then prompt user for password validation
     var DBkeyStr = sessionStorage.getItem('facebook-dbkey-' + my_username);
     if (!DBkeyStr) {
-      // Into fresh session but user already set up key database (maybe null entries) w/ password
-      // Now we need to validate the user with password
+      // Into fresh session but user already set up keys database (maybe null entries) w/ password,
+      // as 'facebook-keysalted-' exists in LocalS. Now we need to validate the user with password
       var password = "";
-      while (password == "") { password = prompt("Please confirm your key database password:"); }
-      var pwds = sjcl.codec.utf8String.toBits(password);
-      var pwdSalt_str = pwdsalted;
-      var pwdsaltDgst = pwdSalt_str.split('|')[0];
-      var salt_String = pwdSalt_str.split('|')[1];
-      var salt = sjcl.codec.base64.toBits(salt_String);
-      var pwdsaltBits = sjcl.bitArray.concat(pwds, salt);
-      var pwd_newDgst = aes128_hash(sjcl.codec.base64.fromBits(pwdsaltBits));
+      while (!password || password == "") { password = prompt("Please confirm your key database password:"); }
 
-      while (pwdsaltDgst != pwd_newDgst) {
-        // If password-salt hash digest does NOT match, keep asking for
-        // a valiad password for user validation. For security this should
-        // be limited to only a few number of times (e.g. 10), if still
-        // fail we can choose to erase all persistent data & let user to
-        // roll in again starting fresh new from create key DB password.
-        // But in reality, we kept code simple here. It can be improved!
-
-        password = prompt("Wrong password! Please confirm your key database password again:");
-        pwds = sjcl.codec.utf8String.toBits(password);
-        pwdsaltBits = sjcl.bitArray.concat(pwds, salt);
-        pwd_newDgst = aes128_hash(sjcl.codec.base64.fromBits(pwdsaltBits));
-      }
-
-      // Now user's key database password confirmed, now go ahead recover its key database E/D key:
       var DBsalt_str = cs255.localStorage.getItem('facebook-dbkey-salt-' + my_username);
       var DB_enc_salt_str = DBsalt_str.split('|')[0];
       var DB_mac_salt_str = DBsalt_str.split('|')[1];
 
       var DB_enc_salt = sjcl.codec.base64.toBits(DB_enc_salt_str);
-      var DB_mac_salt = sjcl.codec.base64.toBits(DB_mac_salt_str);
-
       var DB_enc_key = sjcl.misc.pbkdf2(password, DB_enc_salt, null, 128, null);
+
+      var DB_mac_salt = sjcl.codec.base64.toBits(DB_mac_salt_str);
       var DB_mac_key = sjcl.misc.pbkdf2(password, DB_mac_salt, null, 256, null);
 
+      var keySalt_str = keysalted;
+      var keysaltDgst = keySalt_str.split('|')[0];
+      var salt_String = keySalt_str.split('|')[1];
+      var salt = sjcl.codec.base64.toBits(salt_String);
+      var keysaltBits = sjcl.bitArray.concat(DB_enc_key, DB_mac_key);
+      keysaltBits = sjcl.bitArray.concat(keysaltBits, salt);
+      var key_newDgst = aes128_hash(sjcl.codec.base64.fromBits(keysaltBits));
+
+      while (keysaltDgst != key_newDgst) {
+        // If key-salt secure hash digest does NOT match, keep asking for
+        // a valid password for user validation. For security this should
+        // be limited to only a few number of times (e.g. 10),  if still
+        // fail we can choose to erase all persistent data & let user to
+        // roll in again starting fresh new from create key DB password.
+        // But in reality, we kept code simple here. It can be improved!
+
+        password = prompt("Wrong password! Please confirm your key database password again:");
+        if (password) {
+          DB_enc_key = sjcl.misc.pbkdf2(password, DB_enc_salt, null, 128, null);
+          DB_mac_key = sjcl.misc.pbkdf2(password, DB_mac_salt, null, 256, null);
+          keysaltBits = sjcl.bitArray.concat(DB_enc_key, DB_mac_key);
+          keysaltBits = sjcl.bitArray.concat(keysaltBits, salt);
+          key_newDgst = aes128_hash(sjcl.codec.base64.fromBits(keysaltBits));
+        }
+      }
+
+      // Now user's key database password is confirmed, so as user's database E/D/MAC keys
       var DB_enc_keyStr = sjcl.codec.base64.fromBits(DB_enc_key);
       var DB_mac_keyStr = sjcl.codec.base64.fromBits(DB_mac_key);
       DBkeyStr = DB_enc_keyStr + '|' + DB_mac_keyStr;
