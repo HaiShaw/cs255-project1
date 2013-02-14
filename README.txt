@@ -55,10 +55,10 @@ Special note to run project code and facebook functional testing:
         128Bit of it is used as AES128 E/D key, other 2x128Bit of it is used as ECBC-MAC keys build on top AES128 cipher.
         (Due to longer key representation, increased 'CS255 Keys' table width to 100 to enable base64 key string display)
 
-    -   All random numbers (message group keys, CTR random nonce, user password hash salt, group-keys DataBase E/D/M key
+    -   All random numbers (message group keys, CTR random nonce, user DB' keys hash salt, group-keys DataBase E/D/M key
         derivation salt for pbkdf2) used in code are from GetRandomValues(), which is cryptographic secure with entropy!
 
-    -   All salts are moved to 256Bit with stronger entropy, main salts are: user password hash salt, salt for deriving
+    -   All salts are moved to 256Bit with stronger entropy, main salts are: user DB' keys hash salt, salt for deriving
         user's key-DB E/D key, salt for deriving user's key-DB MAC key.
 
     -   Use pbkdf2 to derive per user group-keys DataBase E/D key (128Bit) and MAC keys (2x128Bit) separately from user
@@ -105,20 +105,20 @@ Special note to run project code and facebook functional testing:
         random nonce may be better to mitigate attack than to use det. nonce (to single user's DB security perspective).   
 
     -   We also build a crypto/secure hash (128Bit AES key) using sjcl.cipher.aes constructs, this hash generates 128Bit
-        digest (due to relatively small 128Bit AES block size). It is used to hash(password||salt) to validate an user's
-        password later on with the truely random salt saved in persistent localStorage. The password hash salt is truely
+        digest (due to relatively small 128Bit AES block size). It is used to hash(derived_keys||salt) to verify an user
+        password later on with the truely random salt saved in persistent localStorage. The derived keys' hash salt is a
         necessary to prevent rainbow table attacks by attacker - where attacker search through huge prebuilt hash(words)
-        table to find a guess of password if it's low in entropy (for example a word from dictionaries)!
+        table to find a guess of hashed string if it's low in entropy (for example a word from dictionaries)!
         The construct of this approach (used in code) is:
-            store ( aes128_hash(user's input password || salt) || salt)     ==> localStorage
-        For valiodation, we just need to re-compute and compare the aes128_hash(user's input password || salt) from salt!
+            store ( es128_hash(pbkdf2 derived [password] user's DB keys || salt) || salt)     ==> localStorage
+        For valiodation, we just need to re-compute and compare the aes128_hash(user's derived DB keys || salt) from salt!
         The construct is believed to be secure enough given the collision resistency from underlying secure hash and salt.
 
     -   With this aes128_hash() in place, we could use another approach to validate user identity through password input,
         that is hash the per user E/D/MAC keys to the group-keys DataBase (keys derived by pbkdf2) along with salt, then
         save the result to the persistent localStorage together with the salt, so the construct of this approach is:
             store ( aes128_hash(user's DB E/D/MAC keys || salt) || salt) ==> localStorage
-        But we choose to code up the first approach in above. 
+        In Milestone 2: We moved to this approach away from aes128_hash(user_password||salt). 
 
     -   The string we chose to store (localStorage) the secure hash digest along with salt is:
             base64(digest) + '|' + base64(salt)
